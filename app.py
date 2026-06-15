@@ -1,5 +1,6 @@
-import streamlit as st
+import re
 import time
+import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.tools.tavily_search import TavilySearchResults
 from board import build_blackboard_graph
@@ -7,7 +8,7 @@ from board import build_blackboard_graph
 st.set_page_config(page_title="Blackboard Chef", layout="wide")
 st.title("🍳 Blackboard Chef")
 st.markdown("**Blackboard Architecture + LangGraph**")
-import re
+
 
 def extract_between(text, start_phrase, end_phrase=None, include_phrases=True):
     """
@@ -44,6 +45,8 @@ def extract_between(text, start_phrase, end_phrase=None, include_phrases=True):
             return text[start_idx + len(start_phrase):].strip()
     
     return ""
+
+
 # ====================== SIDEBAR ======================
 with st.sidebar:
     st.header("Settings")
@@ -71,6 +74,8 @@ with st.sidebar:
 
     start_button = st.button("🚀 Start Planning", type="primary", use_container_width=True)
 
+
+
 # ====================== MAIN AREA ======================
 recipe_report = st.container()
 status_placeholder = st.empty()
@@ -81,7 +86,7 @@ if start_button and gemini_key and tavily_key:
     # Create LLM and Tool
     if "llm" not in st.session_state:
         st.session_state.llm = ChatGoogleGenerativeAI(
-            model="gemini-3.1-flash-lite",   # Changed to more stable model
+            model="gemini-3.1-flash-lite",   
             google_api_key=gemini_key,
             temperature=0.5 ,
         )
@@ -111,30 +116,6 @@ if start_button and gemini_key and tavily_key:
         "next_agent": None
     }
 
-    # # Run the graph
-    # with blackboard_container:
-    #     st.subheader("📋 Blackboard Progress (Live)")
-    #     bb_expander = st.expander("Show Full Blackboard", expanded=True)
-    #     bb_placeholder = bb_expander.empty()
-
-    # state = initial_state.copy()
-
-    # try:
-    #     for _ in range(25):   # safety limit
-    #         output = st.session_state.blackboard_app.invoke(state)
-    #         state = output
-
-    #         # Live update
-    #         with bb_placeholder:
-    #             for report in state.get("blackboard", []):
-    #                 print(f"live update report:\t\t\t{report}")
-    #                 st.markdown(report)
-    #                 st.divider()
-
-    #         if state.get("next_agent") == "FINISH":
-    #             break
-
-    #         time.sleep(0.7)
 
     with blackboard_container:
         st.subheader("📋 Blackboard Progress")
@@ -149,11 +130,9 @@ if start_button and gemini_key and tavily_key:
 
             # Build the blackboard display
             reports = state.get("blackboard", [])
-            # if "Report from Recipe Generator" in reports:
             with recipe_report:
 
                 reports_text = "\n\n---\n\n".join(reports)
-                # st.info(type(reports))
                 recipe = extract_between(reports_text, "Report from Recipe Generator", "Report from Recipe Generator")
                 if recipe:
                     st.markdown(recipe)
@@ -170,8 +149,6 @@ if start_button and gemini_key and tavily_key:
             if state.get("next_agent") == "FINISH":
                 break
             time.sleep(0.7)
-    # except Exception as e:
-    #     st.error(f"Error: {e}")
 
         # Final Result
         with final_recipe_placeholder:
@@ -181,7 +158,7 @@ if start_button and gemini_key and tavily_key:
             final_text = "\n\n".join(state.get("blackboard", [])[-4:])  # last few reports
             st.markdown(final_text)
 
-            # Download Button (Fixed)
+            # Download Button
             st.download_button(
                 label="📥 Download Recipe",
                 data=final_text,
