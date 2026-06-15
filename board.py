@@ -1,31 +1,22 @@
 import os
-from typing import List, Annotated, TypedDict, Optional
-from dotenv import load_dotenv
+from typing import List, TypedDict, Optional
 from pydantic import BaseModel, Field
-from langchain_core.prompts import ChatPromptTemplate
 # For pretty printing
 from rich.console import Console
 from rich.markdown import Markdown
-
 # LangGraph components
 from langgraph.graph import StateGraph, END
-# from langchain_tavily import TavilySearch
-from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.prompts import ChatPromptTemplate
+
+
+
 
 
 console = Console()
-
-from typing import TypedDict, List, Optional
-from pydantic import BaseModel, Field
-from langgraph.graph import StateGraph, END
-from langchain_core.prompts import ChatPromptTemplate
-# فرض بر اینه که llm و search_tool و console قبلاً تعریف شدن
-
 # ====================== BLACKBOARD STATE ======================
 class BlackboardState(TypedDict):
-    user_request: dict           # ورودی ساختاریافته کاربر (به جای str)
-    blackboard: List[str]        # تمام گزارش‌های agentها
+    user_request: dict           # structured user input 
+    blackboard: List[str]        # all agents reports
     available_agents: List[str]
     next_agent: Optional[str]
 
@@ -38,7 +29,7 @@ class ControllerDecision(BaseModel):
     reasoning: str = Field(description="A brief reason for choosing the next agent.")
 
 
-# ====================== SPECIALIST AGENT FACTORY (اصلاح شده) ======================
+# ====================== SPECIALIST AGENT FACTORY ======================
 def create_blackboard_specialist(persona: str, agent_name: str, llm, search_tool):
     system_prompt = f"""You are an expert {persona}.
 Your job is to contribute specifically and concisely to the meal planning goal.
@@ -58,7 +49,6 @@ Current Blackboard:
 """)
     ])
 
-    # بدون bind_tools برای شروع (بعداً اگر نیاز شد اضافه می‌کنیم)
     agent = prompt_template | llm.bind_tools([search_tool])
 
     def specialist_node(state: BlackboardState):
@@ -80,7 +70,6 @@ Current Blackboard:
 
             print(f"result\t\t:{result}")
             
-            # هندل کردن خروجی بهتر
             if hasattr(result, 'content'):
                 content = result.content[0]["text"]
             else:
@@ -137,12 +126,12 @@ def create_controller_node(llm):
     return controller_node
 
 
-# ====================== ساخت گراف ======================
+# ====================== Graph Building ======================
 def build_blackboard_graph(llm, search_tool):
     bb_graph_builder = StateGraph(BlackboardState)
 
  
-    # ====================== ایجاد agentها ======================
+    # ====================== Agent Creating ======================
     inventory_agent = create_blackboard_specialist(
         "Inventory Analyst who checks available ingredients and identifies shortages", 
         "Inventory Agent", llm, search_tool
@@ -173,7 +162,8 @@ def build_blackboard_graph(llm, search_tool):
         "Critic Agent", llm, search_tool
     )
     controller_node = create_controller_node(llm)
-    # اضافه کردن نودها
+
+    # adding nodes
     bb_graph_builder.add_node("Controller", controller_node)
     bb_graph_builder.add_node("Inventory Agent", inventory_agent)
     bb_graph_builder.add_node("Nutrition Agent", nutrition_agent)
@@ -206,7 +196,7 @@ def build_blackboard_graph(llm, search_tool):
             "FINISH": END
         }
     )
-    # بعد از هر agent برمی‌گردد به Controller
+    
     for agent in ["Inventory Agent", "Nutrition Agent", "Taste Agent", 
                   "Creativity Agent", "Recipe Generator", "Critic Agent"]:
         bb_graph_builder.add_edge(agent, "Controller")
