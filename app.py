@@ -3,8 +3,9 @@ import time
 import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.tools.tavily_search import TavilySearchResults
-from board import build_blackboard_graph
+
 from chat import handle_chat_message
+from board import build_blackboard_graph
 
 st.set_page_config(page_title="Blackboard Chef", layout="wide")
 st.title("🍳 Blackboard Chef")
@@ -159,7 +160,6 @@ if start_button and gemini_key and tavily_key:
             st.subheader("🍽 Final Recipe")
 
             final_text = "\n\n".join(state.get("blackboard", [])[-4:])  # last few reports
-            # st.markdown(final_text)
 
             # Download Button
             st.download_button(
