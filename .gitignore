@@ -1,5 +1,5 @@
 __pycache__/
-
+outputs/
 *.rar
 *.ipynb
 *.lock

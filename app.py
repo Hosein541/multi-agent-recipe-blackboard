@@ -4,6 +4,7 @@ import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.tools.tavily_search import TavilySearchResults
 from board import build_blackboard_graph
+from chat import handle_chat_message
 
 st.set_page_config(page_title="Blackboard Chef", layout="wide")
 st.title("🍳 Blackboard Chef")
@@ -57,9 +58,9 @@ with st.sidebar:
     ingredients = st.text_area("Available Ingredients (one per line)", 
                                placeholder="chicken\n tomato\n onion\n rice")
     
-    people = st.number_input("Number of People", min_value=1, value=4)
+    people = st.number_input("Number of People", min_value=1, value=4, max_value=15)
     constraints = st.multiselect("Dietary Constraints", 
-                                 ["vegan", "vegetarian", "keto", "gluten-free", "dairy-free", 
+                                 ["vegan", "vegetarian", "keto", "gluten-free", "dairy-free", "high-protein", 
                                   "no red meat", "nut allergy", "Iranian traditional", "Indian traditional", "Italian traditional", "Japanese traditional"])
     
     time_available = st.selectbox("Available Cooking Time", 
@@ -104,7 +105,7 @@ if start_button and gemini_key and tavily_key:
         "ingredients": [item.strip() for item in ingredients.split("\n") if item.strip()],
         "people": int(people),
         "constraints": constraints,
-        "time": time_available,
+        "time_available": time_available,
         "goal": goal,
         "extra_info": extra_info
     }
@@ -127,6 +128,7 @@ if start_button and gemini_key and tavily_key:
         for _ in range(25):
             output = st.session_state.blackboard_app.invoke(state)
             state = output
+            st.session_state.current_state = state
 
             # Build the blackboard display
             reports = state.get("blackboard", [])
@@ -136,6 +138,7 @@ if start_button and gemini_key and tavily_key:
                 recipe = extract_between(reports_text, "Report from Recipe Generator", "Report from Recipe Generator")
                 if recipe:
                     st.markdown(recipe)
+                    st.session_state.final_text = recipe
                 else :
                     st.info("No report found starting with '**Report from Recipe Generator**'.")
             st.divider()
@@ -156,7 +159,7 @@ if start_button and gemini_key and tavily_key:
             st.subheader("🍽 Final Recipe")
 
             final_text = "\n\n".join(state.get("blackboard", [])[-4:])  # last few reports
-            st.markdown(final_text)
+            # st.markdown(final_text)
 
             # Download Button
             st.download_button(
@@ -166,7 +169,78 @@ if start_button and gemini_key and tavily_key:
                 mime="text/markdown"
             )
 
+        st.session_state.planner_ready = True
+        st.session_state.counter = 0
+
     except Exception as e:
         st.error(f"Error: {str(e)}")
+
+if st.session_state.get("planner_ready", False):
+    if st.session_state.counter > 0:
+
+        st.markdown(st.session_state.final_text)
+
+        st.download_button(
+            label="📥 Download Recipe",
+            data=st.session_state.final_text,
+            key=15,
+            file_name="blackboard_chef_recipe.md",
+            mime="text/markdown"
+        )
+
+    st.session_state.counter +=1
+    st.subheader("💬 Chat with Your Recipe Generator Advisor")
+
+    #chat history
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            st.markdown(msg.get("agent_output", ""))
+
+    # recieve user question
+    question = st.chat_input("Ask something about your plan...")
+
+    if question:
+        # add user message to the chat history
+        st.session_state.chat_history.append({"role": "user", "content": question})
+        with st.chat_message("user"):
+            st.markdown(question)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                response, state, output_type = handle_chat_message(
+                    user_message=question,   # ← اصلاح مهم
+                    current_state=st.session_state.current_state,
+                    finance_advisor=st.session_state.blackboard_app,
+                    llm=st.session_state.llm,
+                )
+                st.session_state.current_state = state
+                st.markdown(response)
+
+                if output_type:
+                    st.subheader("📌 Final Recipe")
+                    final_output_text = "\n\n".join(state.get("blackboard", [])[-4:])
+
+                    recipe = extract_between(final_output_text, "Report from Recipe Generator", "Report from Recipe Generator")
+                    
+                    st.markdown(recipe)
+                    # save file and download button
+                    final_text = "# Blackboard Chef - Full Report\n\n" + final_output_text
+
+                    st.download_button(
+                        label="📥 Download Plan",
+                        key=2,
+                        data=final_text,
+                        file_name="blackboard_chef_recipe.md",
+                        mime="text/markdown"
+                    )
+        if output_type:
+            st.session_state.chat_history.append({"role": "assistant", "content": response, "agent_output":final_output_text})
+        else : 
+            st.session_state.chat_history.append({"role": "assistant", "content": response})
+
 else:
     st.info("Please enter your API keys and meal information to start.")
